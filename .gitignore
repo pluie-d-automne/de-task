@@ -1,0 +1,4 @@
+minio/data/.minio.sys/*
+experiments*
+airflow/logs/scheduler/*
+airflow/logs/dag_processor_manager/*
