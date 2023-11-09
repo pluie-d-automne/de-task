@@ -10,7 +10,15 @@ docker-compose up -d --build
 * URL: localhost:8080
 * user: airflow
 * password: airflow
-3) Запустить DAG:
+3) Создать подключения в Airflow: в Admin -> Connections -> +
+```text
+Connection Id: KAFKA_USER_DATA_CONN
+Connection Type: Apache Kafka
+Config Dict {"bootstrap.servers":"kafka:9092", "security.protocol":"PLAINTEXT"}
+
+```
+
+4) Запустить DAG:
 * dag_kafka_to_s3
 
 ## Описание решения

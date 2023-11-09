@@ -1,9 +1,11 @@
 from datetime import datetime, timedelta
 from airflow.decorators import dag, task
+from airflow.hooks.base import BaseHook
 import logging
 
 API_URL = "https://randomuser.me/api/"
-USERS_CNT_TO_LOAD = 10 # Сколько случайных пользователей будет загружено в Кафку каждый запуск
+USERS_CNT_TO_LOAD = 500 # Сколько случайных пользователей будет загружено в Кафку каждый запуск
+KAFKA_TOPIC_NAME = "user_data"
 
 default_args = {
     'owner': 'airflow'
@@ -29,14 +31,11 @@ def dag():
         
         logger = logging.getLogger('load_user_data_to_kafka')
         
-        KAFKA_TOPIC_NAME = "user_data"
-        conf_producer = {
-		'bootstrap.servers' : 'kafka:29092',
-		'security.protocol' : 'PLAINTEXT',
-		}
-        
+        conn = BaseHook.get_connection('KAFKA_USER_DATA_CONN')
+        conf_producer = json.loads(conn.get_extra())
         producer = Producer(conf_producer)
         logger.info("Kafka producer seccesfully created")
+        
         def delivery_report(errmsg, msg):
             if errmsg is not None:
                 logger.warning("Delivery failed for Message: {} : {}".format(msg.key(), errmsg))
@@ -45,11 +44,13 @@ def dag():
         for i in range(USERS_CNT_TO_LOAD):
             r = requests.get(API_URL)
             if r.status_code == 200:
-                logger.info("Status Code: {}".format(r.status_code))
                 message_json = json.dumps(r.json()).encode()
-                logger.info("Message: {}".format(message_json[:10]))
                 producer.produce(topic=KAFKA_TOPIC_NAME, value=message_json, on_delivery=delivery_report)
-        producer.poll(0)
+                producer.poll(0)
+                if i % 20==0: # После каждых 20 асинхронно отправленных сообщений, убеждаемся, что они дошли
+                    producer.flush()
+            else:
+                logger.warning("Received {} status_code from API".format(r.status_code))
         producer.flush()
         
     load_user_data_to_kafka()
