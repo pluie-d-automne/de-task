@@ -39,6 +39,8 @@ services:
       retries: 5
       start_period: 5s
     restart: always
+    networks:
+      - de-task-network
 
   airflow-webserver:
     <<: *airflow-common
@@ -52,6 +54,8 @@ services:
       retries: 5
       start_period: 30s
     restart: always
+    networks:
+      - de-task-network
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
@@ -67,30 +71,34 @@ services:
       retries: 5
       start_period: 30s
     restart: always
+    networks:
+      - de-task-network
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
 
-  airflow-worker:
-    <<: *airflow-common
-    command: celery worker
-    healthcheck:
-      # yamllint disable rule:line-length
-      test:
-        - "CMD-SHELL"
-        - 'celery --app airflow.providers.celery.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}" || celery --app airflow.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"'
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-    environment:
-      <<: *airflow-common-env
-    restart: always
-    depends_on:
-      <<: *airflow-common-depends-on
-      airflow-init:
-        condition: service_completed_successfully
+  # airflow-worker:
+  #   <<: *airflow-common
+  #   command: celery worker
+  #   healthcheck:
+  #     # yamllint disable rule:line-length
+  #     test:
+  #       - "CMD-SHELL"
+  #       - 'celery --app airflow.providers.celery.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}" || celery --app airflow.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"'
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 5
+  #     start_period: 30s
+  #   environment:
+  #     <<: *airflow-common-env
+  #   restart: always
+  #   networks:
+  #     - de-task-network
+  #   depends_on:
+  #     <<: *airflow-common-depends-on
+  #     airflow-init:
+  #       condition: service_completed_successfully
 
   airflow-init:
     <<: *airflow-common
@@ -167,6 +175,8 @@ services:
       _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
       #_PIP_ADDITIONAL_REQUIREMENTS: ''
     user: "0:0"
+    networks:
+      - de-task-network
     volumes:
       - ${AIRFLOW_PROJ_DIR:-.}:/sources
 
@@ -187,15 +197,16 @@ services:
     networks:
       - de-task-network
     ports:
-      - 9092:9092
+      - 29092:29092
       - 30001:30001
     environment:
       KAFKA_CREATE_TOPICS: user_data
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
+      KAFKA_ADVERTISED_LISTENERS: INSIDE://kafka:29092,OUTSIDE://localhost:29092
+      KAFKA_LISTENERS: INSIDE://0.0.0.0:29092,OUTSIDE://0.0.0.0:29092
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 100
@@ -235,6 +246,8 @@ services:
     environment:
       MINIO_ACCESS_KEY: minio
       MINIO_SECRET_KEY: minio124
+    networks:
+      - de-task-network
     command: server --address ":9000" --console-address ":9001" /data
     volumes:
       - ./minio/data:/export
@@ -242,6 +255,8 @@ services:
 
   createbuckets:
     image: minio/mc
+    networks:
+      - de-task-network
     depends_on:
       - minio
     entrypoint: >
